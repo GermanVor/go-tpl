@@ -67,7 +67,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, stor userStor.Inter
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(r.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 100))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -101,7 +101,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, stor userStor.Interfac
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(r.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 100))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

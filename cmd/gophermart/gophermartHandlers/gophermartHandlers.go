@@ -17,7 +17,7 @@ func SetOrderHandler(w http.ResponseWriter, r *http.Request, stor gophermartStor
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(r.Body)
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 100))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
