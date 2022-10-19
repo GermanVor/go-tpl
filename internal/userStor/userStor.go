@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -81,7 +82,8 @@ func Init(databaseURI string) Interface {
 }
 
 func createSessionToken() string {
-	return uuid.New().String()
+	bytes := sha256.Sum256([]byte(uuid.New().String()))
+	return hex.EncodeToString(bytes[:])
 }
 
 func getLogin(login string) string {
