@@ -14,6 +14,7 @@ import (
 
 const (
 	SessionTokenName = "sessionToken"
+	limitReader      = 100
 )
 
 func CheckUserTokenMiddleware(next http.Handler, stor userStor.Interface) http.Handler {
@@ -67,9 +68,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, stor userStor.Inter
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 100))
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, limitReader+1))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(bodyBytes) > limitReader {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -101,9 +107,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, stor userStor.Interfac
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 100))
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, limitReader+1))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(bodyBytes) > limitReader {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

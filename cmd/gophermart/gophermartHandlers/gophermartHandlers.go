@@ -11,15 +11,22 @@ import (
 	"github.com/go-chi/chi"
 )
 
+const limitReader = 100
+
 func SetOrderHandler(w http.ResponseWriter, r *http.Request, stor gophermartStor.Interface) {
 	if r.Header.Get("Content-Type") != common.TextPlaneStr {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 100))
+	bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, limitReader+1))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if len(bodyBytes) > limitReader {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
