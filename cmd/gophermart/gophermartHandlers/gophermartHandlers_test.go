@@ -60,7 +60,7 @@ var i = 0
 var mux sync.RWMutex
 var accrualScenerio = []accrualStor.Order{
 	{Order: "", Accrual: 0, Status: accrualStor.OrderStatusRegistered},
-	{Order: "", Accrual: 11.5, Status: accrualStor.OrderStatusProcessing},
+	{Order: "", Accrual: 0, Status: accrualStor.OrderStatusProcessing},
 	{Order: "", Accrual: 22, Status: accrualStor.OrderStatusProcessed},
 }
 
@@ -230,7 +230,7 @@ func TestGetOrder(t *testing.T) {
 
 		require.Equal(t, 1, len(respBody))
 		assert.Equal(t, gophermartStor.OrderStatusProcessing, respBody[0].Status)
-		assert.Equal(t, accrualScenerio[i].Accrual, respBody[0].Accrual)
+		assert.Equal(t, float64(0), respBody[0].Accrual)
 		assert.Equal(t, orderID, respBody[0].Number)
 	})
 

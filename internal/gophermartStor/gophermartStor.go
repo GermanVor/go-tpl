@@ -123,7 +123,7 @@ func Init(databaseURI string, accrualAddress string) Interface {
 		log.Fatalln(err.Error())
 	}
 
-	log.Printf("Connected to DB %s successfully\n", databaseURI)
+	log.Printf("Connected to DB %s successfully, gophermartStor\n", databaseURI)
 
 	tx, err := conn.Begin(context.TODO())
 	if err != nil {
@@ -146,8 +146,11 @@ func Init(databaseURI string, accrualAddress string) Interface {
 		}
 	}
 
-	if CreateBalancesTable(tx) != nil {
-		log.Fatalln(err.Error())
+	{
+		err := CreateBalancesTable(tx)
+		if err != nil {
+			log.Fatalln(err.Error())
+		}
 	}
 
 	{
@@ -169,7 +172,7 @@ func Init(databaseURI string, accrualAddress string) Interface {
 		log.Fatalln(err.Error())
 	}
 
-	log.Println("Created Tables successfully")
+	log.Println("Created Tables (ordersPool, orderHistory, balances) successfully")
 
 	return &storageObject{
 		dbPool:         conn,
@@ -181,35 +184,38 @@ func getTime() string {
 	return time.Now().Format(time.RFC3339)
 }
 
-func (stor *storageObject) increaseBalance(userID string, value float64) {
-	_, err := stor.dbPool.Exec(
-		context.TODO(),
-		increaseBalanceSQL,
-		userID,
-		value,
-	)
-
-	if err != nil {
-		log.Println(userID, err.Error())
-		return
-	}
-}
-
-func (stor *storageObject) setOrder(userID string, order accrualStor.Order) {
+func (stor *storageObject) setOrder(userID string, order accrualStor.Order) error {
 	order.Accrual = math.Ceil(order.Accrual*100) / 100
+	uploadedAt := getTime()
 
-	status := OrderStatusNew
-
-	if order.Status == accrualStor.OrderStatusInvalid {
-		status = OrderStatusInvalid
-	} else if order.Status == accrualStor.OrderStatusProcessing {
+	status := OrderStatusInvalid
+	switch order.Status {
+	case accrualStor.OrderStatusProcessing:
 		status = OrderStatusProcessing
-	} else if order.Status == accrualStor.OrderStatusProcessed {
+	case accrualStor.OrderStatusProcessed:
 		status = OrderStatusProcessed
 	}
 
-	uploadedAt := getTime()
-	_, err := stor.dbPool.Exec(
+	if order.Status != accrualStor.OrderStatusProcessed {
+		_, err := stor.dbPool.Exec(
+			context.TODO(),
+			setOrderSQL,
+			order.Order,
+			status,
+			order.Accrual,
+			uploadedAt,
+		)
+
+		return err
+	}
+
+	tx, err := stor.dbPool.Begin(context.TODO())
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.TODO())
+
+	_, err = tx.Exec(
 		context.TODO(),
 		setOrderSQL,
 		order.Order,
@@ -219,76 +225,99 @@ func (stor *storageObject) setOrder(userID string, order accrualStor.Order) {
 	)
 
 	if err != nil {
-		log.Println(userID, order, err.Error())
-		return
+		return err
 	}
 
-	stor.increaseBalance(userID, float64(order.Accrual))
+	_, err = stor.dbPool.Exec(
+		context.TODO(),
+		increaseBalanceSQL,
+		userID,
+		order.Accrual,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(context.TODO())
 }
 
-func (stor *storageObject) startPolling(userID string, orderID string) {
-	ticker := time.NewTicker(time.Second)
-
+func pollFunc(url string) (*accrualStor.Order, error) {
 	req, err := http.NewRequest(
 		http.MethodGet,
-		stor.accrualAddress+"/api/orders/"+orderID,
+		url,
 		nil,
 	)
 
 	if err != nil {
-		log.Println(err)
-		return
+		return nil, err
 	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	order := accrualStor.Order{}
+	err = json.Unmarshal(bodyBytes, &order)
+	if err != nil {
+		return nil, err
+	}
+
+	return &order, nil
+}
+
+func (stor *storageObject) startPolling(userID string, orderID string) {
+	ticker := time.NewTicker(time.Second)
 
 	go func() {
 		defer func() {
 			ticker.Stop()
 		}()
 
-		var resp *http.Response
-		var err error
+		prevAccrualOrderStatus := accrualStor.OrderStatusRegistered
 
 		for {
 			<-ticker.C
-
-			resp, err = http.DefaultClient.Do(req)
+			order, err := pollFunc(stor.accrualAddress + "/api/orders/" + orderID)
 			if err != nil {
-				log.Println(err)
+				log.Println("polling error", userID, err)
 				continue
 			}
 
-			if resp.StatusCode == http.StatusOK {
-				bodyBytes, err := io.ReadAll(resp.Body)
-				if err != nil {
-					break
-				}
-
-				order := accrualStor.Order{}
-				err = json.Unmarshal(bodyBytes, &order)
-				if err != nil {
-					break
-				}
-
-				if order.Order != orderID {
-					break
-				}
-
-				stor.setOrder(userID, order)
-
-				if order.Status == accrualStor.OrderStatusInvalid ||
-					order.Status == accrualStor.OrderStatusProcessed {
-					break
-				}
-			} else if resp.StatusCode == http.StatusTooManyRequests {
-				time.Sleep(10 * time.Second)
+			if order == nil {
+				continue
 			}
 
-			resp.Body.Close()
-		}
+			if order.Order != orderID {
+				continue
+			}
 
-		// last one always open
-		if resp != nil {
-			resp.Body.Close()
+			if prevAccrualOrderStatus == order.Status {
+				continue
+			}
+
+			err = stor.setOrder(userID, *order)
+			if err != nil {
+				log.Println("polling error", userID, order, err)
+				continue
+			}
+
+			prevAccrualOrderStatus = order.Status
+
+			if order.Status == accrualStor.OrderStatusInvalid ||
+				order.Status == accrualStor.OrderStatusProcessed {
+				break
+			}
 		}
 	}()
 }
