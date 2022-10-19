@@ -28,11 +28,12 @@ func SetOrderHandler(w http.ResponseWriter, r *http.Request, stor gophermartStor
 	userID := common.GetContextUserID(r)
 	status, err := stor.InitOrder(userID, orderID)
 	if err != nil {
-		if errors.Is(err, gophermartStor.ErrOrderAlreadyAccepted) {
+		switch {
+		case errors.Is(err, gophermartStor.ErrOrderAlreadyAccepted):
 			http.Error(w, err.Error(), http.StatusConflict)
-		} else if errors.Is(err, gophermartStor.ErrInvalidOrderIDFormat) {
+		case errors.Is(err, gophermartStor.ErrInvalidOrderIDFormat):
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		} else {
+		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
@@ -98,7 +99,7 @@ func GetBalanceHandler(w http.ResponseWriter, r *http.Request, stor gophermartSt
 }
 
 type MakeWithdrawResponse struct {
-	Order string `json:"order"`
+	Order string  `json:"order"`
 	Sum   float64 `json:"sum"`
 }
 
@@ -113,11 +114,12 @@ func MakeWithdrawHandler(w http.ResponseWriter, r *http.Request, stor gophermart
 
 	err := stor.MakeWithdrawBalance(userID, response.Order, response.Sum)
 	if err != nil {
-		if errors.Is(err, gophermartStor.ErrNotEnoughFunds) {
+		switch {
+		case errors.Is(err, gophermartStor.ErrNotEnoughFunds):
 			http.Error(w, err.Error(), http.StatusPaymentRequired)
-		} else if errors.Is(err, gophermartStor.ErrInvalidOrderIDFormat) {
+		case errors.Is(err, gophermartStor.ErrInvalidOrderIDFormat):
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		} else {
+		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	} else {

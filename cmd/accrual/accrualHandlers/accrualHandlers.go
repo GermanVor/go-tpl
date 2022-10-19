@@ -18,13 +18,14 @@ func GetOrderHandler(w http.ResponseWriter, r *http.Request, stor accrualStor.In
 
 	orderPtr, err := stor.GetOrder(orderID)
 	if err != nil {
-		if errors.Is(err, accrualStor.ErrInvalidOrderIDFormat) {
+		switch {
+		case errors.Is(err, accrualStor.ErrInvalidOrderIDFormat):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else if errors.Is(err, accrualStor.ErrExceededRequestsNumber) {
+		case errors.Is(err, accrualStor.ErrExceededRequestsNumber):
 			http.Error(w, err.Error(), http.StatusTooManyRequests)
-		} else if errors.Is(err, accrualStor.ErrUnknownOrderID) {
+		case errors.Is(err, accrualStor.ErrUnknownOrderID):
 			http.Error(w, err.Error(), http.StatusNoContent)
-		} else {
+		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
@@ -53,11 +54,12 @@ func SetOrderHandler(w http.ResponseWriter, r *http.Request, stor accrualStor.In
 
 	err := stor.SetOrder(orderPackage)
 	if err != nil {
-		if errors.Is(err, accrualStor.ErrInvalidOrderIDFormat) {
+		switch {
+		case errors.Is(err, accrualStor.ErrInvalidOrderIDFormat):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else if errors.Is(err, accrualStor.ErrOrderAlreadyAccepted) {
+		case errors.Is(err, accrualStor.ErrOrderAlreadyAccepted):
 			http.Error(w, err.Error(), http.StatusConflict)
-		} else {
+		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
@@ -81,11 +83,12 @@ func SetGoodRewardHandler(w http.ResponseWriter, r *http.Request, stor accrualSt
 
 	err := stor.SetGoodReward(goodReward)
 	if err != nil {
-		if errors.Is(err, accrualStor.ErrInvalidGoodReward) {
+		switch {
+		case errors.Is(err, accrualStor.ErrInvalidGoodReward):
 			http.Error(w, err.Error(), http.StatusBadRequest)
-		} else if errors.Is(err, accrualStor.ErrGoodRewardAlreadyAccepted) {
+		case errors.Is(err, accrualStor.ErrGoodRewardAlreadyAccepted):
 			http.Error(w, err.Error(), http.StatusConflict)
-		} else {
+		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
