@@ -250,7 +250,7 @@ func TestGetOrder(t *testing.T) {
 
 					assert.Equal(t, orderID, respBody.Order)
 					assert.Equal(t, expectedAccural, respBody.Accrual)
-					assert.Equal(t, "PROCESSED", respBody.Status)
+					assert.Equal(t, "PROCESSED", string(respBody.Status))
 
 					return
 				}

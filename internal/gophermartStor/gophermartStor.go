@@ -24,18 +24,20 @@ const (
 	SetOrderStatusAccepted
 )
 
+type OrderStatus string
+
 const (
-	OrderStatusNew        string = "NEW"
-	OrderStatusProcessing string = "PROCESSING"
-	OrderStatusInvalid    string = "INVALID"
-	OrderStatusProcessed  string = "PROCESSED"
+	OrderStatusNew        OrderStatus = "NEW"
+	OrderStatusProcessing OrderStatus = "PROCESSING"
+	OrderStatusInvalid    OrderStatus = "INVALID"
+	OrderStatusProcessed  OrderStatus = "PROCESSED"
 )
 
 type OrdersForEachObject struct {
-	Number     string  `json:"number"`
-	Status     string  `json:"status"`
-	Accrual    float64 `json:"accrual,omitempty"`
-	UploadedAt string  `json:"uploaded_at"`
+	Number     string      `json:"number"`
+	Status     OrderStatus `json:"status"`
+	Accrual    float64     `json:"accrual,omitempty"`
+	UploadedAt string      `json:"uploaded_at"`
 }
 type OrdersForEachHandler func(order *OrdersForEachObject) error
 

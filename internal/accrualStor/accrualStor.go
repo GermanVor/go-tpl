@@ -13,17 +13,19 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+type OrderStatus string
+
 const (
-	OrderStatusRegistered string = "REGISTERED"
-	OrderStatusInvalid    string = "INVALID"
-	OrderStatusProcessing string = "PROCESSING"
-	OrderStatusProcessed  string = "PROCESSED"
+	OrderStatusRegistered OrderStatus = "REGISTERED"
+	OrderStatusInvalid    OrderStatus = "INVALID"
+	OrderStatusProcessing OrderStatus = "PROCESSING"
+	OrderStatusProcessed  OrderStatus = "PROCESSED"
 )
 
 type Order struct {
-	Order   string  `json:"order"`
-	Status  string  `json:"status"`
-	Accrual float64 `json:"accrual"`
+	Order   string      `json:"order"`
+	Status  OrderStatus `json:"status"`
+	Accrual float64     `json:"accrual"`
 }
 
 type Good struct {
@@ -36,15 +38,17 @@ type OrderPackage struct {
 	Goods []Good `json:"goods"`
 }
 
+type RewardType string
+
 const (
-	RewardTypePercent string = "%"
-	RewardTypePT      string = "pt"
+	RewardTypePercent RewardType = "%"
+	RewardTypePT      RewardType = "pt"
 )
 
 type GoodReward struct {
-	Match      string  `json:"match"`
-	Reward     float64 `json:"reward"`
-	RewardType string  `json:"reward_type"`
+	Match      string     `json:"match"`
+	Reward     float64    `json:"reward"`
+	RewardType RewardType `json:"reward_type"`
 }
 
 type Interface interface {
