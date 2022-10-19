@@ -76,16 +76,16 @@ const (
 	// SELECT userID FROM ordersPool WHERE orderID=$1
 	getUserIDByOrderSQL = "SELECT userID FROM ordersPool WHERE orderID=$1"
 
-	// INSERT INTO ordersPool (userID, orderID, status, uploaded_at)
-	// VALUES ($1, $2, $3, $4)
-	initOrderSQL = "INSERT INTO ordersPool (userID, orderID, status, uploaded_at) " +
-		"VALUES ($1, $2, $3, $4)"
+	// INSERT INTO ordersPool (userID, orderID, status) VALUES ($1, $2, $3, $4)
+	initOrderSQL = "INSERT INTO ordersPool (userID, orderID, status) VALUES ($1, $2, $3)"
 
-	// UPDATE ordersPool SET (status, accrual, uploaded_at) = ($2, $3, $4) WHERE orderID=$1
-	setOrderSQL = "UPDATE ordersPool SET (status, accrual, uploaded_at) = ($2, $3, $4) WHERE orderID=$1"
+	// UPDATE ordersPool SET (status, accrual) = ($2, $3, $4) WHERE orderID=$1
+	setOrderSQL = "UPDATE ordersPool SET (status, accrual) = ($2, $3) WHERE orderID=$1"
 
-	// SELECT orderID, status, uploaded_at, accrual FROM ordersPool;
-	selectOrderSQL = "SELECT orderID, status, uploaded_at, accrual FROM ordersPool WHERE userID=$1"
+	// SELECT orderID, status, TO_CHAR(uploaded_at, 'YYYY-MM-DD HH:MI:SS.MSOF'), accrual
+	// FROM ordersPool WHERE userID=$1 ORDER BY uploaded_at
+	selectOrderSQL = "SELECT orderID, status, TO_CHAR(uploaded_at, 'YYYY-MM-DD\"T\"HH:MI:SS\"Z\"TZ'), accrual " +
+		"FROM ordersPool WHERE userID=$1 ORDER BY uploaded_at"
 
 	// UPDATE balances SET current=current-$2 WHERE current-$2>=0 AND userID=$1
 	spendBalanceSQL = "UPDATE balances SET current=current-$2, withdrawn=$2 WHERE current-$2>=0 AND userID=$1"
@@ -96,11 +96,13 @@ const (
 	// SELECT current, withdrawn FROM balances WHERE userID=$1;
 	selectBalanceSQL = "SELECT current, withdrawn FROM balances WHERE userID=$1"
 
-	// SELECT orderID, sum, processed_at FROM orderHistory WHERE userID=$1
-	selectWithdrawalSQL = "SELECT orderID, sum, processed_at FROM orderHistory WHERE userID=$1"
+	// SELECT orderID, sum, TO_CHAR(processed_at, 'YYYY-MM-DD HH:MI:SS.MSOF') FROM orderHistory
+	// WHERE userID=$1 ORDER BY processed_at
+	selectWithdrawalSQL = "SELECT orderID, sum, TO_CHAR(processed_at, 'YYYY-MM-DD\"T\"HH:MI:SS\"Z\"TZ') FROM orderHistory " +
+		"WHERE userID=$1 ORDER BY processed_at"
 
 	// INSERT INTO orderHistory (userID, orderID, sum, processed_at) VALUES ($1, $2, $3, $4)
-	addWithdrawalSQL = "INSERT INTO orderHistory (userID, orderID, sum, processed_at) VALUES ($1, $2, $3, $4)"
+	addWithdrawalSQL = "INSERT INTO orderHistory (userID, orderID, sum) VALUES ($1, $2, $3)"
 
 	// INSERT INTO balances (userID, current, withdrawn) VALUES ($1, 0, 0)
 	CreateBalanceSQL = "INSERT INTO balances (userID, current, withdrawn) VALUES ($1, 0, 0)"
@@ -108,9 +110,9 @@ const (
 
 func CreateBalancesTable(tx pgx.Tx) error {
 	sql := "CREATE TABLE IF NOT EXISTS balances (" +
-		"userID text UNIQUE, " +
-		"current decimal, " +
-		"withdrawn decimal" +
+		"userID TEXT UNIQUE, " +
+		"current DECIMAL DEFAULT 0, " +
+		"withdrawn DECIMAL DEFAULT 0" +
 		")"
 
 	_, err := tx.Exec(context.TODO(), sql)
@@ -133,11 +135,11 @@ func Init(databaseURI string, accrualAddress string) Interface {
 
 	{
 		sql := "CREATE TABLE IF NOT EXISTS ordersPool (" +
-			"userID text, " +
-			"orderID text UNIQUE, " +
-			"status text, " +
-			"accrual decimal DEFAULT 0, " +
-			"uploaded_at text" +
+			"userID TEXT, " +
+			"orderID TEXT UNIQUE, " +
+			"status TEXT, " +
+			"accrual DECIMAL DEFAULT 0, " +
+			"uploaded_at TIMESTAMP DEFAULT NOW()" +
 			")"
 
 		_, err = tx.Exec(context.TODO(), sql)
@@ -155,10 +157,10 @@ func Init(databaseURI string, accrualAddress string) Interface {
 
 	{
 		sql := "CREATE TABLE IF NOT EXISTS orderHistory (" +
-			"userID text UNIQUE, " +
-			"orderID text, " +
-			"sum decimal, " +
-			"processed_at text" +
+			"userID TEXT UNIQUE, " +
+			"orderID TEXT, " +
+			"sum DECIMAL, " +
+			"processed_at TIMESTAMP DEFAULT NOW()" +
 			")"
 
 		_, err = tx.Exec(context.TODO(), sql)
@@ -180,13 +182,8 @@ func Init(databaseURI string, accrualAddress string) Interface {
 	}
 }
 
-func getTime() string {
-	return time.Now().Format(time.RFC3339)
-}
-
 func (stor *storageObject) setOrder(userID string, order accrualStor.Order) error {
 	order.Accrual = math.Ceil(order.Accrual*100) / 100
-	uploadedAt := getTime()
 
 	status := OrderStatusInvalid
 	switch order.Status {
@@ -203,7 +200,6 @@ func (stor *storageObject) setOrder(userID string, order accrualStor.Order) erro
 			order.Order,
 			status,
 			order.Accrual,
-			uploadedAt,
 		)
 
 		return err
@@ -221,7 +217,6 @@ func (stor *storageObject) setOrder(userID string, order accrualStor.Order) erro
 		order.Order,
 		status,
 		order.Accrual,
-		uploadedAt,
 	)
 
 	if err != nil {
@@ -327,14 +322,12 @@ func (stor *storageObject) InitOrder(userID string, orderID string) (SetOrderSta
 		return SetOrderStatusErr, ErrInvalidOrderIDFormat
 	}
 
-	uploadedAt := getTime()
 	_, err := stor.dbPool.Exec(
 		context.TODO(),
 		initOrderSQL,
 		userID,
 		orderID,
 		OrderStatusNew,
-		uploadedAt,
 	)
 	if err != nil {
 		if common.IsAlreadyCreatedRowErr(err) {
@@ -429,7 +422,6 @@ func (stor *storageObject) MakeWithdrawBalance(userID string, orderID string, su
 		userID,
 		orderID,
 		sum,
-		getTime(),
 	)
 
 	if err != nil {

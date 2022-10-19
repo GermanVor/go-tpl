@@ -186,7 +186,7 @@ func Init(databaseURI string, requestCountLimit uint16) Interface {
 		log.Fatalln(err.Error())
 	}
 
-	log.Println("Created Tables successfully")
+	log.Println("Created Tables (ordersReward, goods, goodsBaskets) successfully")
 
 	return &storageObject{
 		dbPool:             conn,
