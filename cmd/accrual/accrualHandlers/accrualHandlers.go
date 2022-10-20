@@ -3,7 +3,6 @@ package accrualhandlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 
 	accrualStor "github.com/GermanVor/go-tpl/internal/accrualStor"
@@ -38,8 +37,7 @@ func GetOrderHandler(w http.ResponseWriter, r *http.Request, stor accrualStor.In
 		return
 	}
 
-	log.Println("QWERTY", orderID, orderPtr)
-
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(bytes)
 	w.WriteHeader(http.StatusOK)
 }
