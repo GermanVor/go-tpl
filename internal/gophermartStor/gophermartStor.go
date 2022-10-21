@@ -101,6 +101,11 @@ const (
 	selectWithdrawalSQL = "SELECT orderID, sum, TO_CHAR(processed_at, 'YYYY-MM-DD\"T\"HH:MI:SS\"Z\"TZ') FROM orderHistory " +
 		"WHERE userID=$1 ORDER BY processed_at"
 
+	// SELECT userId, orderID FROM ordersPool
+	// WHERE status!=string(OrderStatusProcessed) AND status!=string(OrderStatusInvalid)
+	selectProcessedOrderSQL = "SELECT userId, orderID FROM ordersPool " +
+		"WHERE status!='" + string(OrderStatusProcessed) + "' AND status!='" + string(OrderStatusInvalid) + "'"
+
 	// INSERT INTO orderHistory (userID, orderID, sum, processed_at) VALUES ($1, $2, $3, $4)
 	addWithdrawalSQL = "INSERT INTO orderHistory (userID, orderID, sum) VALUES ($1, $2, $3)"
 
@@ -108,11 +113,36 @@ const (
 	CreateBalanceSQL = "INSERT INTO balances (userID, current, withdrawn) VALUES ($1, 0, 0)"
 )
 
+func CreateOrdersPoolTable(tx pgx.Tx) error {
+	sql := "CREATE TABLE IF NOT EXISTS ordersPool (" +
+		"userID TEXT, " +
+		"orderID TEXT UNIQUE, " +
+		"status TEXT, " +
+		"accrual DECIMAL DEFAULT 0, " +
+		"uploaded_at TIMESTAMP DEFAULT NOW()" +
+		")"
+
+	_, err := tx.Exec(context.TODO(), sql)
+	return err
+}
+
 func CreateBalancesTable(tx pgx.Tx) error {
 	sql := "CREATE TABLE IF NOT EXISTS balances (" +
 		"userID TEXT UNIQUE, " +
 		"current DECIMAL DEFAULT 0, " +
 		"withdrawn DECIMAL DEFAULT 0" +
+		")"
+
+	_, err := tx.Exec(context.TODO(), sql)
+	return err
+}
+
+func CreateOrderHistoryTable(tx pgx.Tx) error {
+	sql := "CREATE TABLE IF NOT EXISTS orderHistory (" +
+		"userID TEXT UNIQUE, " +
+		"orderID TEXT, " +
+		"sum DECIMAL, " +
+		"processed_at TIMESTAMP DEFAULT NOW()" +
 		")"
 
 	_, err := tx.Exec(context.TODO(), sql)
@@ -134,36 +164,18 @@ func Init(databaseURI string, accrualAddress string) Interface {
 	defer tx.Rollback(context.TODO())
 
 	{
-		sql := "CREATE TABLE IF NOT EXISTS ordersPool (" +
-			"userID TEXT, " +
-			"orderID TEXT UNIQUE, " +
-			"status TEXT, " +
-			"accrual DECIMAL DEFAULT 0, " +
-			"uploaded_at TIMESTAMP DEFAULT NOW()" +
-			")"
 
-		_, err = tx.Exec(context.TODO(), sql)
+		err = CreateOrdersPoolTable(tx)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
-	}
 
-	{
-		err := CreateBalancesTable(tx)
+		err = CreateBalancesTable(tx)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
-	}
 
-	{
-		sql := "CREATE TABLE IF NOT EXISTS orderHistory (" +
-			"userID TEXT UNIQUE, " +
-			"orderID TEXT, " +
-			"sum DECIMAL, " +
-			"processed_at TIMESTAMP DEFAULT NOW()" +
-			")"
-
-		_, err = tx.Exec(context.TODO(), sql)
+		err = CreateOrderHistoryTable(tx)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
@@ -176,9 +188,30 @@ func Init(databaseURI string, accrualAddress string) Interface {
 
 	log.Println("Created Tables (ordersPool, orderHistory, balances) successfully")
 
-	return &storageObject{
+	stor := &storageObject{
 		dbPool:         conn,
 		accrualAddress: accrualAddress,
+	}
+
+	go RecoverPollingProcesses(stor)
+
+	return stor
+}
+
+func RecoverPollingProcesses(stor *storageObject) {
+	rows, err := stor.dbPool.Query(context.TODO(), selectProcessedOrderSQL)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+
+	userID := ""
+	orderID := ""
+
+	for rows.Next() {
+		err := rows.Scan(&userID, &orderID)
+		if err == nil {
+			stor.startPolling(userID, orderID)
+		}
 	}
 }
 

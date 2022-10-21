@@ -128,6 +128,39 @@ var (
 	selectGoodRewardSQL = "SELECT match, reward, reward_type FROM goods"
 )
 
+func CreateOrdersRewardTable(tx pgx.Tx) error {
+	sql := "CREATE TABLE IF NOT EXISTS ordersReward (" +
+		"orderID text UNIQUE, " +
+		"status text, " +
+		"accrual decimal" +
+		")"
+
+	_, err := tx.Exec(context.TODO(), sql)
+	return err
+}
+
+func CreateGoodsTable(tx pgx.Tx) error {
+	sql := "CREATE TABLE IF NOT EXISTS goods (" +
+		"match text UNIQUE, " +
+		"reward decimal, " +
+		"reward_type text" +
+		")"
+
+	_, err := tx.Exec(context.TODO(), sql)
+	return err
+}
+
+func CreateGoodsBasketsTable(tx pgx.Tx) error {
+	sql := "CREATE TABLE IF NOT EXISTS goodsBaskets (" +
+		"orderID text, " +
+		"description text, " +
+		"price decimal" +
+		")"
+
+	_, err := tx.Exec(context.TODO(), sql)
+	return err
+}
+
 func Init(databaseURI string, requestCountLimit uint16) Interface {
 	conn, err := pgxpool.Connect(context.TODO(), databaseURI)
 	if err != nil {
@@ -143,39 +176,17 @@ func Init(databaseURI string, requestCountLimit uint16) Interface {
 	defer tx.Rollback(context.TODO())
 
 	{
-		sql := "CREATE TABLE IF NOT EXISTS ordersReward (" +
-			"orderID text UNIQUE, " +
-			"status text, " +
-			"accrual decimal" +
-			")"
-
-		_, err = tx.Exec(context.TODO(), sql)
+		err = CreateOrdersRewardTable(tx)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
-	}
 
-	{
-		sql := "CREATE TABLE IF NOT EXISTS goods (" +
-			"match text UNIQUE, " +
-			"reward decimal, " +
-			"reward_type text" +
-			")"
-
-		_, err = tx.Exec(context.TODO(), sql)
+		err = CreateGoodsTable(tx)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
-	}
 
-	{
-		sql := "CREATE TABLE IF NOT EXISTS goodsBaskets (" +
-			"orderID text, " +
-			"description text, " +
-			"price decimal" +
-			")"
-
-		_, err = tx.Exec(context.TODO(), sql)
+		err = CreateGoodsBasketsTable(tx)
 		if err != nil {
 			log.Fatalln(err.Error())
 		}
