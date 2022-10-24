@@ -287,6 +287,9 @@ func pollFunc(url string) (*accrualStor.Order, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusTooManyRequests {
+			time.Sleep(10 * time.Second)
+		}
 		return nil, nil
 	}
 

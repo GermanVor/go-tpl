@@ -314,6 +314,7 @@ func (stor *storageObject) SetOrder(orderPackage OrderPackage) error {
 	if err != nil {
 		return err
 	}
+
 	defer func(stor *storageObject, orderPackage OrderPackage) {
 		if errors.Is(tx.Rollback(context.TODO()), pgx.ErrTxClosed) && err == nil {
 			stor.startCalculateAccrual(orderPackage)
